@@ -1,4 +1,5 @@
-use iconv::{IconvError, IconvReader};
+use anyhow::{bail, Result};
+use iconv::IconvReader;
 use itertools::Itertools;
 use log::{debug, info, warn};
 use rayon::prelude::*;
@@ -7,9 +8,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt;
 use std::fs;
 use std::fs::File;
-use std::io;
 use std::io::{BufRead, BufReader, Read};
-use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 
 const SOURCES_FILE: &str = "COHA/shared/coha_sources.utf8.txt";
@@ -24,6 +23,27 @@ enum Genre {
     Nf,
 }
 
+#[derive(Debug)]
+struct TsvError {
+    path: PathBuf,
+    e: String,
+}
+
+impl std::error::Error for TsvError {}
+
+impl fmt::Display for TsvError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.path.to_string_lossy(), self.e)
+    }
+}
+
+fn tsv_err(path: &Path, e: &str) -> TsvError {
+    TsvError {
+        path: path.to_owned(),
+        e: e.to_owned(),
+    }
+}
+
 impl Genre {
     fn parse(s: &str) -> Option<Self> {
         match s {
@@ -35,9 +55,9 @@ impl Genre {
         }
     }
 
-    fn parse_for_files(path: &Path, s: &str) -> Result<Self, MyError> {
+    fn parse_for_files(path: &Path, s: &str) -> Result<Self> {
         match Genre::parse(s) {
-            None => Err(tsv_err(path, &format!("invalid genre: {s}"))),
+            None => bail!(tsv_err(path, &format!("invalid genre: {s}"))),
             Some(x) => Ok(x),
         }
     }
@@ -93,7 +113,7 @@ struct Token {
 }
 
 impl Source {
-    fn parse_tsv(path: &Path, s: &str) -> Result<Self, MyError> {
+    fn parse_tsv(path: &Path, s: &str) -> Result<Self> {
         let mut fields = tsv_split(s);
         let mut next = || match fields.next() {
             None => Err(tsv_err(path, "TSV field missing")),
@@ -120,7 +140,7 @@ fn word_cleanup(x: &str) -> String {
 }
 
 impl Word {
-    fn parse_tsv(path: &Path, s: &str) -> Result<Self, MyError> {
+    fn parse_tsv(path: &Path, s: &str) -> Result<Self> {
         let mut fields = tsv_split(s);
         let mut next = || match fields.next() {
             None => Err(tsv_err(path, "TSV field missing")),
@@ -142,7 +162,7 @@ impl Word {
 }
 
 impl Token {
-    fn parse_tsv(path: &Path, s: &str) -> Result<Self, MyError> {
+    fn parse_tsv(path: &Path, s: &str) -> Result<Self> {
         let mut fields = tsv_split(s);
         let mut next = || match fields.next() {
             None => Err(tsv_err(path, "TSV field missing")),
@@ -159,66 +179,6 @@ impl Token {
     }
 }
 
-pub enum MyError {
-    General(String),
-    IO(io::Error),
-    ParseInt(ParseIntError),
-    CommandLine(String),
-    Tsv(PathBuf, String),
-    Csv(csv::Error),
-    Iconv(IconvError),
-}
-
-impl fmt::Display for MyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MyError::General(s) => write!(f, "{}", s),
-            MyError::IO(e) => write!(f, "{}", e),
-            MyError::ParseInt(e) => write!(f, "{}", e),
-            MyError::CommandLine(s) => write!(f, "{}", s),
-            MyError::Tsv(path, s) => write!(f, "{}: {}", path.to_string_lossy(), s),
-            MyError::Csv(e) => write!(f, "{}", e),
-            MyError::Iconv(e) => write!(f, "{}", e),
-        }
-    }
-}
-
-impl From<io::Error> for MyError {
-    fn from(err: io::Error) -> MyError {
-        MyError::IO(err)
-    }
-}
-
-impl From<ParseIntError> for MyError {
-    fn from(err: ParseIntError) -> MyError {
-        MyError::ParseInt(err)
-    }
-}
-
-impl From<csv::Error> for MyError {
-    fn from(err: csv::Error) -> MyError {
-        MyError::Csv(err)
-    }
-}
-
-impl From<IconvError> for MyError {
-    fn from(err: IconvError) -> MyError {
-        MyError::Iconv(err)
-    }
-}
-
-pub fn cmdline_err(e: &str) -> MyError {
-    MyError::CommandLine(e.to_owned())
-}
-
-fn tsv_err(path: &Path, e: &str) -> MyError {
-    MyError::Tsv(path.to_owned(), e.to_owned())
-}
-
-fn other_err(e: &str) -> MyError {
-    MyError::General(e.to_owned())
-}
-
 fn tsv_split(s: &str) -> std::str::Split<char> {
     s.trim_end_matches(&['\n', '\r']).split('\t')
 }
@@ -227,14 +187,14 @@ fn tsv_check_header<R: Read>(
     path: &Path,
     br: &mut BufReader<R>,
     exp_header: &[&str],
-) -> Result<(), MyError> {
+) -> Result<()> {
     let mut header = String::new();
     if br.read_line(&mut header)? == 0 {
-        return Err(tsv_err(path, "header missing"));
+        bail!(tsv_err(path, "header missing"));
     }
     let header: Vec<&str> = tsv_split(&header).collect();
     if header != exp_header {
-        return Err(tsv_err(path, "unexpected headers"));
+        bail!(tsv_err(path, "unexpected headers"));
     }
     Ok(())
 }
@@ -264,7 +224,7 @@ pub struct CohaSearch<'a> {
     pub filter_list: Vec<&'a CohaFilter>,
 }
 
-fn read_sources(work_dir: &Path) -> Result<Sources, MyError> {
+fn read_sources(work_dir: &Path) -> Result<Sources> {
     let path = work_dir.join(SOURCES_FILE);
     debug!("{}: reading...", path.to_string_lossy());
     let file = File::open(path.clone())?;
@@ -294,7 +254,7 @@ fn read_sources(work_dir: &Path) -> Result<Sources, MyError> {
     Ok(sources)
 }
 
-fn read_lexicon(work_dir: &Path) -> Result<Lexicon, MyError> {
+fn read_lexicon(work_dir: &Path) -> Result<Lexicon> {
     let path = work_dir.join(LEXICON_FILE);
     debug!("{}: reading...", path.to_string_lossy());
     let file = File::open(path.clone())?;
@@ -314,7 +274,7 @@ fn read_lexicon(work_dir: &Path) -> Result<Lexicon, MyError> {
     while br.read_line(&mut s)? > 0 {
         let word = Word::parse_tsv(&path, &s)?;
         if word.word_id.0 < lexicon.len() {
-            return Err(tsv_err(&path, "word IDs not increasing"));
+            bail!(tsv_err(&path, "word IDs not increasing"));
         }
         while word.word_id.0 > lexicon.len() {
             lexicon_padding += 1;
@@ -333,7 +293,7 @@ fn read_lexicon(work_dir: &Path) -> Result<Lexicon, MyError> {
     Ok(lexicon)
 }
 
-fn read_corpus(work_dir: &Path) -> Result<CohaFiles, MyError> {
+fn read_corpus(work_dir: &Path) -> Result<CohaFiles> {
     let path = work_dir.join(CORPUS_DIR);
     debug!("{}: reading...", path.to_string_lossy());
     let mut corpus_paths = Vec::new();
@@ -365,7 +325,7 @@ fn read_corpus(work_dir: &Path) -> Result<CohaFiles, MyError> {
 }
 
 impl Coha {
-    pub fn load(work_dir: &Path) -> Result<Self, MyError> {
+    pub fn load(work_dir: &Path) -> Result<Self> {
         let ((c, s), l) = rayon::join(
             || (read_corpus(work_dir), read_sources(work_dir)),
             || read_lexicon(work_dir),
@@ -401,7 +361,7 @@ impl Coha {
         )
     }
 
-    pub fn search(&self, result_dir: &Path, searches: &[&CohaSearch]) -> Result<(), MyError> {
+    pub fn search(&self, result_dir: &Path, searches: &[&CohaSearch]) -> Result<()> {
         for search in searches {
             let filter_sizes = search
                 .filter_list
@@ -452,7 +412,7 @@ impl Coha {
 }
 
 impl CohaFile {
-    fn new(corpus_path: PathBuf) -> Result<Self, MyError> {
+    fn new(corpus_path: PathBuf) -> Result<Self> {
         let name = corpus_path
             .file_name()
             .expect("valid file name")
@@ -460,20 +420,15 @@ impl CohaFile {
             .into_owned();
         let re = Regex::new(r"^coha_db_(\d+s)\.txt$").unwrap();
         let identifier = match re.captures(&name) {
-            None => Err(other_err(&format!("unexpected file name {name}"))),
-            Some(caps) => Ok(caps.get(1).unwrap().as_str().to_owned()),
-        }?;
+            None => bail!("unexpected file name {name}"),
+            Some(caps) => caps.get(1).unwrap().as_str().to_owned(),
+        };
         Ok(Self {
             corpus_path,
             identifier,
         })
     }
-    fn search(
-        &self,
-        coha: &Coha,
-        result_dir: &Path,
-        searches: &[&CohaSearch],
-    ) -> Result<(), MyError> {
+    fn search(&self, coha: &Coha, result_dir: &Path, searches: &[&CohaSearch]) -> Result<()> {
         let path = &self.corpus_path;
         debug!("{}: reading...", path.to_string_lossy());
         let mut writers = Vec::new();
@@ -494,7 +449,7 @@ impl CohaFile {
         let mut total_hits: usize = 0;
         let mut hit_texts: usize = 0;
 
-        let mut flush = |tokens: &mut Vec<Token>| -> Result<(), MyError> {
+        let mut flush = |tokens: &mut Vec<Token>| -> Result<()> {
             let hits = self.search_text(coha, &mut writers, searches, tokens)?;
             total_hits += hits;
             if hits > 0 {
@@ -515,7 +470,7 @@ impl CohaFile {
             }
             if let Some(prev) = tokens.last() {
                 if prev.token_id >= token.token_id {
-                    return Err(tsv_err(path, "token IDs not increasing"));
+                    bail!(tsv_err(path, "token IDs not increasing"));
                 }
             }
             tokens.push(token);
@@ -544,7 +499,7 @@ impl CohaFile {
         writers: &mut [csv::Writer<File>],
         searches: &[&CohaSearch],
         tokens: &[Token],
-    ) -> Result<usize, MyError> {
+    ) -> Result<usize> {
         assert!(!tokens.is_empty());
         assert!(tokens.first().unwrap().text_id == tokens.last().unwrap().text_id);
         let text_id = tokens.first().unwrap().text_id;
@@ -571,7 +526,7 @@ impl CohaFile {
         search: &CohaSearch,
         source: &Source,
         tokens: &[Token],
-    ) -> Result<usize, MyError> {
+    ) -> Result<usize> {
         let m = search.filter_list.len();
         let n = tokens.len();
         let mut hits = 0;
@@ -593,7 +548,7 @@ impl CohaFile {
         Ok(hits)
     }
 
-    fn write_header(&self, writer: &mut csv::Writer<File>, m: usize) -> Result<(), MyError> {
+    fn write_header(&self, writer: &mut csv::Writer<File>, m: usize) -> Result<()> {
         let mut row = vec![
             "text ID".to_owned(),
             "genre".to_owned(),
@@ -626,7 +581,7 @@ impl CohaFile {
         tokens: &[Token],
         pos: usize,
         m: usize,
-    ) -> Result<(), MyError> {
+    ) -> Result<()> {
         let mut row = vec![
             source.text_id.0.to_string(),
             source.genre.to_string(),

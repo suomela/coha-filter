@@ -1,26 +1,21 @@
-use coha_filter::{cmdline_err, Coha, CohaFilter, CohaSearch, MyError};
-use log::{error, info};
+use anyhow::{bail, Result};
+use coha_filter::{Coha, CohaFilter, CohaSearch};
+use log::info;
 use regex::Regex;
 use std::env;
 use std::path::PathBuf;
-use std::process;
 
 struct Settings {
     work_dir: PathBuf,
     result_dir: PathBuf,
 }
 
-fn get_args() -> Result<Settings, MyError> {
+fn get_args() -> Result<Settings> {
     let mut args = env::args();
     args.next();
-    let mut get_path_arg = |what| {
-        let a = args.next();
-        match a {
-            None => Err(cmdline_err(&format!(
-                "command line argument {what} missing"
-            ))),
-            Some(s) => Ok(PathBuf::from(s)),
-        }
+    let mut get_path_arg = |what| match args.next() {
+        None => bail!("command line argument {what} missing"),
+        Some(s) => Ok(PathBuf::from(s)),
     };
     let work_dir = get_path_arg("WORK_DIR")?;
     let result_dir = get_path_arg("RESULT_DIR")?;
@@ -30,7 +25,7 @@ fn get_args() -> Result<Settings, MyError> {
     })
 }
 
-fn run() -> Result<(), MyError> {
+fn run() -> Result<()> {
     let settings = get_args()?;
     let coha = Coha::load(&settings.work_dir)?;
 
@@ -63,11 +58,9 @@ fn run() -> Result<(), MyError> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     env_logger::init();
-    if let Err(e) = run() {
-        error!("{e}");
-        process::exit(1);
-    }
+    run()?;
     info!("all done");
+    Ok(())
 }
