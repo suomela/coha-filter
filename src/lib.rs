@@ -11,9 +11,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
-const SOURCES_FILE: &str = "COHA/shared/coha_sources.utf8.txt";
-const LEXICON_FILE: &str = "COHA/shared/coha_lexicon.txt";
-const CORPUS_DIR: &str = "COHA/db";
+const SOURCES_FILE: &str = "shared/coha_sources.utf8.txt";
+const LEXICON_FILE: &str = "shared/coha_lexicon.txt";
+const CORPUS_DIR: &str = "db";
 const CONTEXT: usize = 30;
 
 enum Genre {
@@ -224,8 +224,8 @@ pub struct CohaSearch<'a> {
     pub filter_list: Vec<&'a CohaFilter>,
 }
 
-fn read_sources(work_dir: &Path) -> Result<Sources> {
-    let path = work_dir.join(SOURCES_FILE);
+fn read_sources(root_dir: &Path) -> Result<Sources> {
+    let path = root_dir.join(SOURCES_FILE);
     debug!("{}: reading...", path.to_string_lossy());
     let file = File::open(path.clone())?;
     let mut br = BufReader::new(file);
@@ -254,8 +254,8 @@ fn read_sources(work_dir: &Path) -> Result<Sources> {
     Ok(sources)
 }
 
-fn read_lexicon(work_dir: &Path) -> Result<Lexicon> {
-    let path = work_dir.join(LEXICON_FILE);
+fn read_lexicon(root_dir: &Path) -> Result<Lexicon> {
+    let path = root_dir.join(LEXICON_FILE);
     debug!("{}: reading...", path.to_string_lossy());
     let file = File::open(path.clone())?;
     let ireader = IconvReader::new(file, "cp437", "utf-8")?;
@@ -293,8 +293,8 @@ fn read_lexicon(work_dir: &Path) -> Result<Lexicon> {
     Ok(lexicon)
 }
 
-fn read_corpus(work_dir: &Path) -> Result<CohaFiles> {
-    let path = work_dir.join(CORPUS_DIR);
+fn read_corpus(root_dir: &Path) -> Result<CohaFiles> {
+    let path = root_dir.join(CORPUS_DIR);
     debug!("{}: reading...", path.to_string_lossy());
     let mut corpus_paths = Vec::new();
     for subdir in path.read_dir()? {
@@ -325,10 +325,10 @@ fn read_corpus(work_dir: &Path) -> Result<CohaFiles> {
 }
 
 impl Coha {
-    pub fn load(work_dir: &Path) -> Result<Self> {
+    pub fn load(root_dir: &Path) -> Result<Self> {
         let ((c, s), l) = rayon::join(
-            || (read_corpus(work_dir), read_sources(work_dir)),
-            || read_lexicon(work_dir),
+            || (read_corpus(root_dir), read_sources(root_dir)),
+            || read_lexicon(root_dir),
         );
         let c = c?;
         let s = s?;

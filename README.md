@@ -14,10 +14,10 @@ In `examples/coha-be-going-to.rs` we have a sample program that searches for the
 - “gon”, “na”, *
 - “gon”, “na”, V?I*
 
-If your corpus is in e.g. `~/corpus/COHA/` and you would like to store the search results in `~/results/`, you can run it like this:
+If your corpus is in e.g. `~/COHA/` and you would like to store the search results in `~/results/`, you can run it like this:
 
 ```sh
-cargo run --release --example coha-be-going-to ~/corpus ~/results
+cargo run --release --example coha-be-going-to ~/COHA ~/results
 ```
 
 This should take less than half a minute; it will create CSV files in `~/results` that are organized by search term and decade. The files will contain the hit and 30 words of context on both sides.

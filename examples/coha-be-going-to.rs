@@ -9,8 +9,8 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(author, version, about)]
 struct Args {
-    /// Directory where the corpus is located
-    work_dir: PathBuf,
+    /// Directory where the COHA corpus is located
+    corpus_dir: PathBuf,
     /// Where to store results
     result_dir: PathBuf,
     #[command(flatten)]
@@ -18,7 +18,7 @@ struct Args {
 }
 
 fn run(args: &Args) -> Result<()> {
-    let coha = Coha::load(&args.work_dir)?;
+    let coha = Coha::load(&args.corpus_dir)?;
 
     let re_vb = Regex::new(r"^vb").unwrap();
     let re_v_i = Regex::new(r"^v.i").unwrap();
