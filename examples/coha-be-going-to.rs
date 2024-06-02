@@ -1,33 +1,24 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
+use clap::Parser;
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use coha_filter::{Coha, CohaFilter, CohaSearch};
 use log::info;
 use regex::Regex;
-use std::env;
 use std::path::PathBuf;
 
-struct Settings {
+#[derive(Parser)]
+#[command(author, version, about)]
+struct Args {
+    /// Directory where the corpus is located
     work_dir: PathBuf,
+    /// Where to store results
     result_dir: PathBuf,
+    #[command(flatten)]
+    verbose: Verbosity<InfoLevel>,
 }
 
-fn get_args() -> Result<Settings> {
-    let mut args = env::args();
-    args.next();
-    let mut get_path_arg = |what| match args.next() {
-        None => bail!("command line argument {what} missing"),
-        Some(s) => Ok(PathBuf::from(s)),
-    };
-    let work_dir = get_path_arg("WORK_DIR")?;
-    let result_dir = get_path_arg("RESULT_DIR")?;
-    Ok(Settings {
-        work_dir,
-        result_dir,
-    })
-}
-
-fn run() -> Result<()> {
-    let settings = get_args()?;
-    let coha = Coha::load(&settings.work_dir)?;
+fn run(args: &Args) -> Result<()> {
+    let coha = Coha::load(&args.work_dir)?;
 
     let re_vb = Regex::new(r"^vb").unwrap();
     let re_v_i = Regex::new(r"^v.i").unwrap();
@@ -52,15 +43,18 @@ fn run() -> Result<()> {
         filter_list: vec![&f_gon, &f_na, &CohaFilter::Any],
     };
     coha.search(
-        &settings.result_dir,
+        &args.result_dir,
         &[&s_be_going_to_verb, &s_gonna_verb, &s_gonna_any],
     )?;
     Ok(())
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
-    run()?;
+    let args = Args::parse();
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .init();
+    run(&args)?;
     info!("all done");
     Ok(())
 }

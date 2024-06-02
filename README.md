@@ -20,12 +20,6 @@ If your corpus is in e.g. `~/corpus/COHA/` and you would like to store the searc
 cargo run --release --example coha-be-going-to ~/corpus ~/results
 ```
 
-You can enable more verbose logging with the usual `env_logger` environment variables, e.g.:
-
-```sh
-RUST_LOG=info cargo run --release --example coha-be-going-to ~/corpus ~/results
-```
-
 This should take less than half a minute; it will create CSV files in `~/results` that are organized by search term and decade. The files will contain the hit and 30 words of context on both sides.
 
 ## Author
