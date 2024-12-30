@@ -180,7 +180,7 @@ impl Token {
 }
 
 fn tsv_split(s: &str) -> std::str::Split<char> {
-    s.trim_end_matches(&['\n', '\r']).split('\t')
+    s.trim_end_matches(['\n', '\r']).split('\t')
 }
 
 fn tsv_check_header<R: Read>(
