@@ -1,5 +1,4 @@
 use anyhow::{bail, Result};
-use iconv::IconvReader;
 use itertools::Itertools;
 use log::{debug, info, warn};
 use rayon::prelude::*;
@@ -10,6 +9,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
+mod cp437;
 
 const SOURCES_FILE: &str = "shared/coha_sources.utf8.txt";
 const LEXICON_FILE: &str = "shared/coha_lexicon.txt";
@@ -254,12 +254,22 @@ fn read_sources(root_dir: &Path) -> Result<Sources> {
     Ok(sources)
 }
 
+fn read_cp437_file_to_string(path: &Path) -> Result<String> {
+    let mut file = File::open(path)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let mut string = String::new();
+    for b in bytes {
+        string.push(cp437::CP437[b as usize]);
+    }
+    Ok(string)
+}
+
 fn read_lexicon(root_dir: &Path) -> Result<Lexicon> {
     let path = root_dir.join(LEXICON_FILE);
     debug!("{}: reading...", path.to_string_lossy());
-    let file = File::open(path.clone())?;
-    let ireader = IconvReader::new(file, "cp437", "utf-8")?;
-    let mut br = BufReader::new(ireader);
+    let file_string = read_cp437_file_to_string(&path)?;
+    let mut br = BufReader::new(file_string.as_bytes());
 
     let header = &["wID", "wordCS", "word", "lemma", "PoS"];
     tsv_check_header(&path, &mut br, header)?;
