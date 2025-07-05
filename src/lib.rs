@@ -600,7 +600,7 @@ impl CohaFile {
             source.author.to_owned(),
             pos.to_string(),
         ];
-        let start = if pos < CONTEXT { 0 } else { pos - CONTEXT };
+        let start = pos.saturating_sub(CONTEXT);
         let end = tokens.len().min(pos + m + CONTEXT);
         row.push(coha.get_text(&tokens[start..pos]));
         for j in 0..m {
