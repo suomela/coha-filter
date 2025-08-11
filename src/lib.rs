@@ -179,7 +179,7 @@ impl Token {
     }
 }
 
-fn tsv_split(s: &str) -> std::str::Split<char> {
+fn tsv_split(s: &str) -> std::str::Split<'_, char> {
     s.trim_end_matches(['\n', '\r']).split('\t')
 }
 
