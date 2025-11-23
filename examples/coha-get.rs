@@ -22,7 +22,7 @@ fn run(args: &Args) -> Result<()> {
 
     let re_v_n = Regex::new(r"^v.n").unwrap();
     let f_v_n = coha.get_filter(|w| re_v_n.is_match(&w.pos));
-    let f_get = coha.get_filter(|w| w.word == "get");
+    let f_get = coha.get_filter(|w| w.lemma == "get");
 
     let s_get = CohaSearch {
         label: "get".to_owned(),
